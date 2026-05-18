@@ -53,6 +53,7 @@ const typeBadges = document.getElementById('type-badges');
 const root = document.documentElement;
 
 let currentIndex = -1;
+let updateTimeoutId = null;
 
 function updateCard(index) {
   if (index === currentIndex) return;
@@ -60,6 +61,11 @@ function updateCard(index) {
   if (!slide) return;
   
   currentIndex = index;
+
+  // Clear any pending timeout to prevent race conditions when scrolling fast
+  if (updateTimeoutId) {
+    clearTimeout(updateTimeoutId);
+  }
 
   // Add fade-out class to animate elements out
   image.classList.add('fade-out');
@@ -75,7 +81,7 @@ function updateCard(index) {
   root.style.setProperty('--bg-color', slide.bg);
 
   // Wait for fade out, then update content and fade in
-  setTimeout(() => {
+  updateTimeoutId = setTimeout(() => {
     image.src = slide.imageSrc;
     numberLabel.textContent = slide.number;
     nameLabel.textContent = slide.name;
@@ -125,10 +131,17 @@ sections.forEach((section) => observer.observe(section));
 const card = document.getElementById('pokemon-card');
 const glare = document.getElementById('card-glare');
 
-card.addEventListener('mousemove', (e) => {
+let isHovering = false;
+let mouseX = 0;
+let mouseY = 0;
+let rafId = null;
+
+function updateCardTransform() {
+  if (!isHovering) return;
+  
   const rect = card.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const x = mouseX - rect.left;
+  const y = mouseY - rect.top;
   
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
@@ -141,19 +154,47 @@ card.addEventListener('mousemove', (e) => {
   
   // Update glare position
   glare.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(255,255,255,0.2), transparent 60%)`;
+  
+  rafId = requestAnimationFrame(updateCardTransform);
+}
+
+card.addEventListener('mouseenter', () => {
+  isHovering = true;
+  rafId = requestAnimationFrame(updateCardTransform);
+});
+
+card.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
 });
 
 card.addEventListener('mouseleave', () => {
+  isHovering = false;
+  cancelAnimationFrame(rafId);
   card.style.transform = `rotateX(0deg) rotateY(0deg)`;
   glare.style.background = `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1), transparent 60%)`;
 });
 
 // Parallax ambient light based on mouse position
 const ambientLight = document.querySelector('.ambient-light');
-document.addEventListener('mousemove', (e) => {
-  const x = e.clientX / window.innerWidth;
-  const y = e.clientY / window.innerHeight;
+let globalMouseX = window.innerWidth / 2;
+let globalMouseY = window.innerHeight / 2;
+let ambientRafId = null;
+
+function updateAmbientLight() {
+  const x = globalMouseX / window.innerWidth;
+  const y = globalMouseY / window.innerHeight;
   
   // Move the light slightly based on mouse position
   ambientLight.style.transform = `translate(-50%, -50%) translate(${x * 50}px, ${y * 50}px)`;
+  
+  ambientRafId = requestAnimationFrame(updateAmbientLight);
+}
+
+// Start ambient light animation loop
+updateAmbientLight();
+
+document.addEventListener('mousemove', (e) => {
+  globalMouseX = e.clientX;
+  globalMouseY = e.clientY;
 });
